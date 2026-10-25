@@ -107,3 +107,6 @@ artifacts/
 
 # Headless coverage feed for the Fallow changed-health gate
 .coverage/
+
+# Dev-only import inbox (see vite-plugins/dev-inbox.ts)
+/dev-inbox

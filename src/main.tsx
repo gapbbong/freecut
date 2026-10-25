@@ -21,6 +21,7 @@ let devVitePreloadRecoveryInFlight = false
 // Debug utilities are editor-heavy; keep them out of the production startup graph.
 if (import.meta.env.DEV) {
   void import('@/app/debug').then(({ initializeDebugUtils }) => initializeDebugUtils())
+  void import('@/app/debug/dev-import').then(({ initializeDevImport }) => initializeDevImport())
 }
 
 const initialProjectId = getEditorProjectIdFromPathname(window.location.pathname)

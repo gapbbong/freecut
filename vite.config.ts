@@ -5,6 +5,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { devInboxPlugin } from './vite-plugins/dev-inbox.ts'
 
 // Stamps public/sw.js with the hashed entry-chunk filename at build time so the service
 // worker's CACHE_VERSION — and the sw.js bytes — change on every deploy. Without this the
@@ -81,7 +82,7 @@ export default defineConfig({
     globals: true,
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
-    include: ['src/**/*.test.{ts,tsx}'],
+    include: ['src/**/*.test.{ts,tsx}', 'vite-plugins/**/*.test.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'json', 'html'],
@@ -96,7 +97,14 @@ export default defineConfig({
       },
     },
   },
-  plugins: lazyPlugins(() => [react(), tailwindcss(), serviceWorkerVersionPlugin()]),
+  plugins: lazyPlugins(() => [
+    react(),
+    tailwindcss(),
+    serviceWorkerVersionPlugin(),
+    devInboxPlugin({
+      dir: process.env.FREECUT_DEV_INBOX ?? fileURLToPath(new URL('./dev-inbox', import.meta.url)),
+    }),
+  ]),
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
