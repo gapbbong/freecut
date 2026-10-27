@@ -32,6 +32,7 @@ import {
 import { onPermissionLost, setWorkspaceRoot } from '@/infrastructure/storage/workspace-fs/root'
 import { createLogger } from '@/shared/logging/logger'
 import { WorkspaceGateSplash } from './workspace-gate-splash'
+import { getOpfsWorkspaceHandle, isAutoOpfsWorkspaceEnabled } from './auto-opfs'
 import { usePathname } from './use-pathname'
 
 /**
@@ -79,6 +80,21 @@ export function WorkspaceGate({ children }: { children: React.ReactNode }) {
     window.dispatchEvent(new Event('freecut:ensure-toaster'))
   }, [])
 
+  // When auto-OPFS is on, replace the pick/reconnect splashes with the
+  // permission-free OPFS workspace. Returns true when it took over.
+  const tryAutoOpfs = useCallback(async (): Promise<boolean> => {
+    if (!isAutoOpfsWorkspaceEnabled()) return false
+    try {
+      const handle = await getOpfsWorkspaceHandle()
+      if (!handle) return false
+      await saveWorkspaceHandleRecord(handle)
+      await activate(handle)
+      return true
+    } catch (error) {
+      logger.warn('Auto OPFS workspace failed, falling back to splash', error)
+      return false
+    }
+  }, [activate])
   // Initial load: check if we have a saved handle, check its permission.
   // Skipped on routes that never touch storage (landing page) so first paint
   // doesn't wait on IndexedDB; the effect re-runs when a protected route mounts.
@@ -96,6 +112,7 @@ export function WorkspaceGate({ children }: { children: React.ReactNode }) {
       await ensureKnownWorkspaceForCurrent()
       const record = await getWorkspaceHandleRecord()
       if (!record) {
+        if (!cancelled && (await tryAutoOpfs())) return
         if (!cancelled) setStatus({ kind: 'pick' })
         return
       }
@@ -104,6 +121,8 @@ export function WorkspaceGate({ children }: { children: React.ReactNode }) {
       if (cancelled) return
       if (permission === 'granted') {
         await activate(handle)
+      } else if (await tryAutoOpfs()) {
+        return
       } else {
         setStatus({ kind: 'reconnect', handleName: record.name })
       }
@@ -114,12 +133,13 @@ export function WorkspaceGate({ children }: { children: React.ReactNode }) {
     return () => {
       cancelled = true
     }
-  }, [activate, needsWorkspace])
+  }, [activate, needsWorkspace, tryAutoOpfs])
 
   // Permission-lost mid-session → flip to reconnect.
   useEffect(() => {
     const unsubscribe = onPermissionLost(() => {
       void (async () => {
+        if (await tryAutoOpfs()) return
         const record = await getWorkspaceHandleRecord()
         setStatus({ kind: 'reconnect', handleName: record?.name ?? 'workspace' })
       })()
@@ -127,7 +147,7 @@ export function WorkspaceGate({ children }: { children: React.ReactNode }) {
     return () => {
       unsubscribe()
     }
-  }, [])
+  }, [tryAutoOpfs])
 
   const handlePick = useCallback(async () => {
     setError(null)
